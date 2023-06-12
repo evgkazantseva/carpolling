@@ -7,4 +7,5 @@ router.register(r'trips', TripViewSet)
 router.register(r'user', UserProfileViewSet)
 urlpatterns = [
     path('', include(router.urls)),
+    path('trips/join_trip/', TripViewSet.as_view({'post': 'join_trip'}), name='join_trip'),
 ]

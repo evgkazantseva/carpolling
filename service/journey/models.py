@@ -14,6 +14,8 @@ class Trip(models.Model):
     trip_name = models.CharField(max_length=200)
     start_point = models.CharField(max_length=200)
     end_point = models.CharField(max_length=200)
-    departure_date = models.DateTimeFieldField()
+    departure_date = models.DateTimeField()
     transport_type = models.CharField(max_length=200)
     available_seats = models.IntegerField()
+
+    users = models.ManyToManyField(User, related_name='trips_users', blank=True)
