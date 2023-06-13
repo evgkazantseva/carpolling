@@ -1,11 +1,13 @@
-from django.shortcuts import render
 from .models import Trip, UserProfile
-from .serializers import TripSerializer, UserProfileSerializer
+from .serializers import TripSerializer, UserProfileSerializer, UserSerializer
 
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets, pagination, status
+from django.contrib.auth.models import User
+from rest_framework import viewsets, pagination, status, generics
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.response import Response
 
 
@@ -28,6 +30,7 @@ class TripViewSet(viewsets.ModelViewSet):
         trips = Trip.objects.filter(users=user)
         serializer = TripSerializer(trips, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'])
     def join_trip(self, request):
         trip_id = request.data.get('trip_id')
@@ -50,8 +53,38 @@ class TripViewSet(viewsets.ModelViewSet):
 
 
 class UserProfileViewSet(viewsets.ModelViewSet):
-    queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
 
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        try:
+            profile = UserProfile.objects.get(user_id=user.id)
+        except UserProfile.DoesNotExist:
+            return UserProfile.objects.none()
+        else:
+            queryset = UserProfile.objects.filter(user_id=user.id)
+            return queryset
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
+class UserCreateAPIView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class LoginView(ObtainAuthToken):
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({
+            'token': token.key,
+            'user_id': user.pk
+        })

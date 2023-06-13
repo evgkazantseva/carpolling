@@ -19,3 +19,5 @@ class Trip(models.Model):
     available_seats = models.IntegerField()
 
     users = models.ManyToManyField(User, related_name='trips_users', blank=True)
+
+
