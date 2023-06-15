@@ -7,20 +7,18 @@ from rest_framework import viewsets, pagination, status, generics
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.views import APIView
 from rest_framework.response import Response
 
 
 # Create your views here.
-
-
 class TripViewSet(viewsets.ModelViewSet):
     queryset = Trip.objects.all()
     serializer_class = TripSerializer
 
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     search_fields = ['trip_name']
-    filterset_fields = ['trip_name', 'start_point', 'end_point', 'departure_date', 'transport_type']
+    filter_fields = ['trip_name', 'start_point', 'end_point', 'departure_date', 'transport_type']
     ordering_fields = ['departure_date']
     pagination_class = pagination.PageNumberPagination
 
@@ -39,17 +37,17 @@ class TripViewSet(viewsets.ModelViewSet):
         try:
             trip = Trip.objects.get(pk=trip_id)
         except Trip.DoesNotExist:
-            return Response({'message': 'Поездка не существует.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'message': 'Trip does nit exist.'}, status=status.HTTP_404_NOT_FOUND)
 
         if trip.users.filter(pk=user.pk).exists():
-            return Response({'message': 'Вы уже присоединены к этой поездке.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': 'You have already joined to trip.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if trip.available_seats <= 0:
-            return Response({'message': 'Нет доступных мест в этой поездке.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': 'Sorry, there are no available seats.'}, status=status.HTTP_400_BAD_REQUEST)
 
         trip.users.add(user)
         trip.available_seats -= 1
-        return Response({'message': 'Вы успешно присоединились к поездке.'}, status=status.HTTP_200_OK)
+        return Response({'message': 'Success! You joined to trip.'}, status=status.HTTP_200_OK)
 
 
 class UserProfileViewSet(viewsets.ModelViewSet):
@@ -78,13 +76,19 @@ class UserCreateAPIView(generics.CreateAPIView):
     serializer_class = UserSerializer
 
 
-class LoginView(ObtainAuthToken):
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
-        token, created = Token.objects.get_or_create(user=user)
-        return Response({
-            'token': token.key,
-            'user_id': user.pk
-        })
+class LoginView(APIView):
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        if not User.objects.filter(username=username).exists():
+            return Response({'message': 'Username does not exist'},
+                            status=status.HTTP_404_NOT_FOUND)
+        user = User.objects.get(username=username)
+
+        if not user.check_password(password):
+            return Response({'message': 'Incorrect password'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+        token = Token.objects.get(username)
+
+        return Response({'token': 'token.key'}, status=status.HTTP_200_OK)
