@@ -7,7 +7,6 @@ from rest_framework import viewsets, pagination, status, generics
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.authtoken.models import Token
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authentication import TokenAuthentication
@@ -16,6 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 
 # Create your views here.
 class TripViewSet(viewsets.ModelViewSet):
+    authentication_classes = [TokenAuthentication]
     queryset = Trip.objects.all()
     serializer_class = TripSerializer
 
@@ -24,6 +24,17 @@ class TripViewSet(viewsets.ModelViewSet):
     filter_fields = ['trip_name', 'start_point', 'end_point', 'departure_date', 'transport_type']
     ordering_fields = ['departure_date']
     pagination_class = pagination.PageNumberPagination
+
+    def perform_create(self, serializer):
+        serializer.save(creator=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(creator=request.user)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def my_trips(self, request):
@@ -55,6 +66,8 @@ class TripViewSet(viewsets.ModelViewSet):
 
 class UserProfileViewSet(APIView):
     authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
 
     def get_user_profile(self, user_id):
         try:
@@ -62,17 +75,8 @@ class UserProfileViewSet(APIView):
         except UserProfile.DoesNotExist:
             return None
 
-    def create_user_profile(self, user_id, data):
-        data['user_id'] = user_id
-        serializer = UserProfileSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return serializer.data
-        else:
-            raise serializer.ValidationError(serializer.errors)
-
     def get(self, request):
-        user_id = request.user.id
+        user_id = request.GET.get('user_id')
         user_profile = self.get_user_profile(user_id)
         if user_profile:
             serializer = UserProfileSerializer(user_profile)
@@ -86,18 +90,22 @@ class UserProfileViewSet(APIView):
         if user_profile:
             return Response("User profile already exists.", status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = UserProfileSerializer(data=request.data)
+        data_profile = request.data
+        data_profile['user_id'] = user_id
+        serializer = UserProfileSerializer(data=data_profile)
         if serializer.is_valid():
-            profile_data = self.create_user_profile(user_id, request.data)
-            return Response(profile_data, status=status.HTTP_201_CREATED)
+            serializer.save()
+            return Response(status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request):
         user_id = request.user.id
         user_profile = self.get_user_profile(user_id)
+        data_profile = request.data
+        data_profile['user_id'] = user_id
         if user_profile:
-            serializer = UserProfileSerializer(user_profile, data=request.data)
+            serializer = UserProfileSerializer(user_profile, data=data_profile)
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -125,6 +133,6 @@ class LoginView(APIView):
         if not user.check_password(password):
             return Response({'message': 'Incorrect password'},
                             status=status.HTTP_401_UNAUTHORIZED)
-        token = Token.objects.get(username)
+        token, _ = Token.objects.get_or_create(user=user)
 
-        return Response({'token': 'token.key'}, status=status.HTTP_200_OK)
+        return Response({'token': token.key}, status=status.HTTP_200_OK)
