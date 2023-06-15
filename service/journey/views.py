@@ -9,6 +9,9 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
 
 
 # Create your views here.
@@ -50,25 +53,58 @@ class TripViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Success! You joined to trip.'}, status=status.HTTP_200_OK)
 
 
-class UserProfileViewSet(viewsets.ModelViewSet):
-    serializer_class = UserProfileSerializer
+class UserProfileViewSet(APIView):
+    authentication_classes = [TokenAuthentication]
 
-    # permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
+    def get_user_profile(self, user_id):
         try:
-            profile = UserProfile.objects.get(user_id=user.id)
+            return UserProfile.objects.get(user_id=user_id)
         except UserProfile.DoesNotExist:
-            return UserProfile.objects.none()
-        else:
-            queryset = UserProfile.objects.filter(user_id=user.id)
-            return queryset
+            return None
 
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+    def create_user_profile(self, user_id, data):
+        data['user_id'] = user_id
+        serializer = UserProfileSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return serializer.data
+        else:
+            raise serializer.ValidationError(serializer.errors)
+
+    def get(self, request):
+        user_id = request.user.id
+        user_profile = self.get_user_profile(user_id)
+        if user_profile:
+            serializer = UserProfileSerializer(user_profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response("User profile does not exist.", status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request):
+        user_id = request.user.id
+        user_profile = self.get_user_profile(user_id)
+        if user_profile:
+            return Response("User profile already exists.", status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = UserProfileSerializer(data=request.data)
+        if serializer.is_valid():
+            profile_data = self.create_user_profile(user_id, request.data)
+            return Response(profile_data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        user_id = request.user.id
+        user_profile = self.get_user_profile(user_id)
+        if user_profile:
+            serializer = UserProfileSerializer(user_profile, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response("User profile does not exist.", status=status.HTTP_404_NOT_FOUND)
 
 
 class UserCreateAPIView(generics.CreateAPIView):

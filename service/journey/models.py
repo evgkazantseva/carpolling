@@ -20,6 +20,6 @@ class Trip(models.Model):
     transport_type = models.CharField(max_length=200)
     available_seats = models.IntegerField()
     status = models.CharField(max_length=200)
-
+    creator = models.ForeignKey(User, on_delete=models.CASCADE,  null=True)
     users = models.ManyToManyField(User, related_name='trips_users', blank=True)
 
