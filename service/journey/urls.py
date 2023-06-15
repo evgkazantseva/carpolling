@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import UserProfileViewSet, TripViewSet, UserCreateAPIView, LoginView
 
 router = DefaultRouter()
-router.register(r'trips', TripViewSet)
+router.register('trips', TripViewSet, basename='trip')
 
 urlpatterns = [
     path('', include(router.urls)),
