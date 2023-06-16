@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Trip, UserProfile
+from .models import Trip, UserProfile, Reviews
 from django.contrib.auth.models import User
 
 
@@ -32,4 +32,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = '__all__'
 
+class ReviewsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reviews
+        fields = '__all__'
 

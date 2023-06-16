@@ -20,5 +20,13 @@ class Trip(models.Model):
     available_seats = models.IntegerField()
     status = models.CharField(max_length=200, default='new')
     creator = models.ForeignKey(User, on_delete=models.CASCADE,  null=True)
+
     users = models.ManyToManyField(User, related_name='trips_users', blank=True)
+
+
+class Reviews(models.Model):
+    text = models.CharField(max_length=500)
+    r_user = models.ForeignKey(User, on_delete=models.CASCADE,  null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
