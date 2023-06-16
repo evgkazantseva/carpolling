@@ -11,60 +11,115 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
 
 
-# Create your views here.
-class TripViewSet(viewsets.ModelViewSet):
+class TripView(ListAPIView):
     authentication_classes = [TokenAuthentication]
+
     queryset = Trip.objects.all()
     serializer_class = TripSerializer
-
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    search_fields = ['trip_name']
-    filter_fields = ['trip_name', 'start_point', 'end_point', 'departure_date', 'transport_type']
+    search_fields = ['start_point', 'finish_point']
+    filterset_fields = ['start_point', 'finish_point', 'departure_date', 'transport_type']
     ordering_fields = ['departure_date']
-    pagination_class = pagination.PageNumberPagination
+    pagination_class = PageNumberPagination
 
-    def perform_create(self, serializer):
-        serializer.save(creator=self.request.user)
+    def get(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(creator=request.user)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def my_trips(self, request):
-        user = request.user
-        trips = Trip.objects.filter(users=user)
-        serializer = TripSerializer(trips, many=True)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['post'])
-    def join_trip(self, request):
-        trip_id = request.data.get('trip_id')
-        user = request.user
+    def post(self, request):
+        serializer = TripSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(creator=request.user, status='new')
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def put(self, request, pk):
+        trip = self.get_trip(pk)
+        if not trip:
+            return Response({'message': 'Trip not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TripSerializer(trip, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        trip = self.get_trip(pk)
+        if not trip:
+            return Response({'message': 'Trip not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        trip.delete()
+        return Response({'message': 'Trip is successfully deleted'}, status=status.HTTP_200_OK)
+
+    def get_trip(self, pk):
         try:
-            trip = Trip.objects.get(pk=trip_id)
+            return Trip.objects.get(pk=pk)
         except Trip.DoesNotExist:
-            return Response({'message': 'Trip does nit exist.'}, status=status.HTTP_404_NOT_FOUND)
+            return None
 
-        if trip.users.filter(pk=user.pk).exists():
-            return Response({'message': 'You have already joined to trip.'}, status=status.HTTP_400_BAD_REQUEST)
+# Create your views here.
+# class TripViewSet(viewsets.ModelViewSet):
+#     authentication_classes = [TokenAuthentication]
+#     queryset = Trip.objects.all()
+#     serializer_class = TripSerializer
+#
+#     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+#     search_fields = ['trip_name']
+#     filter_fields = ['trip_name', 'start_point', 'end_point', 'departure_date', 'transport_type']
+#     ordering_fields = ['departure_date']
+#     pagination_class = pagination.PageNumberPagination
+#
+#     def perform_create(self, serializer):
+#         serializer.save(creator=self.request.user)
+#
+#     def update(self, request, *args, **kwargs):
+#         partial = kwargs.pop('partial', False)
+#         instance = self.get_object()
+#         serializer = self.get_serializer(instance, data=request.data, partial=partial)
+#         serializer.is_valid(raise_exception=True)
+#         serializer.save(creator=request.user)
+#         return Response(serializer.data)
+#
+#     @action(detail=False, methods=['get'])
+#     def my_trips(self, request):
+#         user = request.user
+#         trips = Trip.objects.filter(users=user)
+#         serializer = TripSerializer(trips, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+#
+#     @action(detail=False, methods=['post'])
+#     def join_trip(self, request):
+#         trip_id = request.data.get('trip_id')
+#         user = request.user
+#
+#         try:
+#             trip = Trip.objects.get(pk=trip_id)
+#         except Trip.DoesNotExist:
+#             return Response({'message': 'Trip does nit exist.'}, status=status.HTTP_404_NOT_FOUND)
+#
+#         if trip.users.filter(pk=user.pk).exists():
+#             return Response({'message': 'You have already joined to trip.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         if trip.available_seats <= 0:
+#             return Response({'message': 'Sorry, there are no available seats.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         trip.users.add(user)
+#         trip.available_seats -= 1
+#         return Response({'message': 'Success! You joined to trip.'}, status=status.HTTP_200_OK)
 
-        if trip.available_seats <= 0:
-            return Response({'message': 'Sorry, there are no available seats.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        trip.users.add(user)
-        trip.available_seats -= 1
-        return Response({'message': 'Success! You joined to trip.'}, status=status.HTTP_200_OK)
-
-
-class UserProfileViewSet(APIView):
+class UserProfileView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
